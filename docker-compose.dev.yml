@@ -1,0 +1,56 @@
+version: '3'
+
+volumes:
+  dbdata:
+
+services:
+  database:
+    image: mariadb:10.3
+    ports:
+      - "3306"
+    environment:
+      - MYSQL_DATABASE=test
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      net:
+    restart: always
+
+  # Web Server
+  webserver:
+    image: nginx:1.14-alpine
+    volumes:
+      - ./docker/webserver/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/webserver/nginx/www.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./:/application
+      - ./docker/webserver/public/robots.disallow.txt:/application/public/robots.txt:ro
+    environment:
+      - VIRTUAL_HOST=test.local
+    networks:
+      expose_network:
+      net:
+    depends_on:
+      - php_fpm
+    restart: always
+
+  # Web Application
+  php_fpm:
+    build:
+      context: ./docker/webapp
+      dockerfile: Dockerfile
+    volumes:
+      - ./docker/webapp/php-ini-overrides.ini:/usr/local/etc/php/conf.d/default.ini:ro
+      - ./docker/webapp/php-fpm-overrides.conf:/usr/local/etc/php-fpm.d/zz-pm.conf:ro
+      - ./:/application
+      - ./docker/webserver/public/robots.disallow.txt:/application/public/robots.txt:ro
+    networks:
+      net:
+    restart: always
+
+networks:
+  # Join proxy network for exposing http services
+  expose_network:
+    external:
+      name: web_proxy
+  net:
